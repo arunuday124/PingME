@@ -13,10 +13,13 @@ import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
+import { useNavigation } from '@react-navigation/native'; 
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const navigation = useNavigation();
+
   return (
     <View style={styles.container}>
       <Text style={styles.text}>Welcome</Text>
@@ -29,37 +32,37 @@ const Login = () => {
         style={styles.imageBackground}
         resizeMode="cover"
       >
-      <TextInput
-        style={styles.email_input}
-        placeholder="Email"
-        placeholderTextColor="#dbf0dd"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.password_input}
-        placeholder="Password"
-        placeholderTextColor="#dbf0dd"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <View style={styles.button_container}>
-        <TouchableOpacity>
-          <Text style={styles.forgot_pass}>Forgot Password ?</Text>
-        </TouchableOpacity>
+        <TextInput
+          style={styles.email_input}
+          placeholder="Email"
+          placeholderTextColor="#dbf0dd"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.password_input}
+          placeholder="Password"
+          placeholderTextColor="#dbf0dd"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <View style={styles.button_container}>
+          <TouchableOpacity>
+            <Text style={styles.forgot_pass}>Forgot Password ?</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity>
-          <Text style={styles.new_acc}>Create new account</Text>
-        </TouchableOpacity>
-      </View>
-      <View>
-        <TouchableOpacity>
-          <Text style={styles.Login}>Login</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
+            <Text style={styles.new_acc}>Create new account</Text>
+          </TouchableOpacity>
+        </View>
+        <View>
+          <TouchableOpacity>
+            <Text style={styles.Login}>SignIn</Text>
+          </TouchableOpacity>
+        </View>
       </ImageBackground>
     </View>
   );
@@ -96,7 +99,6 @@ const styles = StyleSheet.create({
     marginLeft: wp('10%'),
     marginTop: hp('1%'),
     width: '80%',
-
   },
   email_input: {
     width: '85%',
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 15,
     marginLeft: wp('1%'),
+    marginTop: hp('3%'),
   },
   new_acc: {
     color: 'white',
@@ -152,6 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     textAlign: 'center',
     paddingVertical: 10,
+    marginTop: hp('3%'),
   },
   Login: {
     color: 'white',
@@ -165,7 +169,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 15,
     alignSelf: 'center',
-    marginTop: hp('2%'),
+    marginTop: hp('3%'),
   },
   imageBackground: {
     flex: 1,

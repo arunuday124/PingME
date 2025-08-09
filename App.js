@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import LoadingScreen from './src/components/LoadingScreen';
 import Login from './src/components/Login';
 import SignUp from './src/components/SignUp';
+import Dashboard from './src/components/Dashboard';
 
 const Stack = createStackNavigator();
 
@@ -26,10 +27,11 @@ const App = () => {
           <Stack.Screen name="Loading" component={LoadingScreen} />
         ) : (
           <>
-            <Stack.Screen name="Login" component={Login} />
-            <Stack.Screen name="Signup" component={SignUp} />
+            {/* <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="SignUp" component={SignUp} /> */}
           </>
         )}
+        <Stack.Screen name="Dashboard" component={Dashboard} />
       </Stack.Navigator>
     </NavigationContainer>
   );

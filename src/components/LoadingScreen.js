@@ -24,7 +24,7 @@ const LoadingScreen = () => {
   return (
     <View style={styles.container}>
       <Animated.Text style={[styles.text, { opacity: fadeAnim }]}>
-        Loading...
+        PingME 
       </Animated.Text>
     </View>
   );
@@ -37,11 +37,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    // backgroundColor: '#f5f5f5',
+    experimental_backgroundImage: 'linear-gradient(to top, #051f20, #173830, #235347, #8cb499, #dbf0dd)',
   },
   text: {
-    fontSize: 24,
+    fontSize: 44,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
+    fontFamily: 'times'
   },
 });
