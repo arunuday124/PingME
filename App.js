@@ -5,6 +5,7 @@ import LoadingScreen from './src/components/LoadingScreen';
 import Login from './src/components/Login';
 import SignUp from './src/components/SignUp';
 import Dashboard from './src/components/Dashboard';
+import { TodosProvider } from './src/context/TodosContext';
 
 const Stack = createStackNavigator();
 
@@ -21,19 +22,21 @@ const App = () => {
   }, []);
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isLoading ? (
-          <Stack.Screen name="Loading" component={LoadingScreen} />
-        ) : (
-          <>
-            {/* <Stack.Screen name="Login" component={Login} />
-            <Stack.Screen name="SignUp" component={SignUp} /> */}
-          </>
-        )}
-        <Stack.Screen name="Dashboard" component={Dashboard} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <TodosProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {isLoading ? (
+            <Stack.Screen name="Loading" component={LoadingScreen} />
+          ) : (
+            <>
+              {/* <Stack.Screen name="Login" component={Login} />
+              <Stack.Screen name="SignUp" component={SignUp} /> */}
+            </>
+          )}
+          <Stack.Screen name="Dashboard" component={Dashboard} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </TodosProvider>
   );
 };
 

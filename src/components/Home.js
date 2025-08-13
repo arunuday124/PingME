@@ -6,21 +6,40 @@ import {
   TouchableOpacity,
   ScrollView
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   widthPercentageToDP as wp,
   heightPercentageToDP as hp,
 } from 'react-native-responsive-screen';
 import moment from 'moment';
+import { useTodos } from '../context/TodosContext';
 
 const Home = () => {
   const [selectedDate, setSelectedDate] = useState(moment());
   const [dates, setDates] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(moment());
+  const { todos } = useTodos();
+
+  const flatListRef = useRef(null);
+  const ITEM_WIDTH = 65 + 12; // dateItem width + marginRight
 
   useEffect(() => {
     generateDates(currentMonth);
   }, [currentMonth]);
+
+  useEffect(() => {
+    if (!dates.length) return;
+    const today = moment();
+    if (today.isSame(currentMonth, 'month')) {
+      const index = dates.findIndex(d => d.isSame(today, 'day'));
+      if (index >= 0) {
+        setSelectedDate(today);
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToIndex({ index, animated: true });
+        });
+      }
+    }
+  }, [dates, currentMonth]);
 
   const generateDates = month => {
     const firstDay = moment(month).startOf('month');
@@ -40,6 +59,10 @@ const Home = () => {
   const goToNextMonth = () => {
     setCurrentMonth(moment(currentMonth).add(1, 'month'));
   };
+
+  const initialScrollIndex = moment().isSame(currentMonth, 'month')
+    ? moment().date() - 1
+    : 0;
 
   return (
     <View style={styles.container}>
@@ -64,10 +87,25 @@ const Home = () => {
       {/* Calendar Strip */}
       <View style={styles.calendarContainer}>
         <FlatList
+          ref={flatListRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           data={dates}
           keyExtractor={item => item.format('YYYY-MM-DD')}
+          getItemLayout={(_, index) => ({
+            length: ITEM_WIDTH,
+            offset: ITEM_WIDTH * index,
+            index,
+          })}
+          initialScrollIndex={initialScrollIndex}
+          onScrollToIndexFailed={(info) => {
+            // safe fallback
+            const offset = Math.min(info.averageItemLength * info.index, info.averageItemLength * (dates.length - 1));
+            flatListRef.current?.scrollToOffset({ offset, animated: true });
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+            }, 50);
+          }}
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => setSelectedDate(item)}
@@ -108,6 +146,26 @@ const Home = () => {
           <Text style={styles.header_task}>
             Pending Tasks . . .
           </Text>
+          {todos.length === 0 ? (
+            <Text style={styles.emptyText}>No Task Yet</Text>
+          ) : (
+            todos.map(todo => {
+              const total = todo.tasks.length;
+              const done = todo.tasks.filter(t => t.completed).length;
+              return (
+                <View key={todo.id} style={styles.todoItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.todoTitle}>{todo.title}</Text>
+                    <Text style={styles.todoMeta}>Created on: {todo.date}</Text>
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressFill, { width: `${total === 0 ? 0 : Math.round((done/total)*100)}%` }]} />
+                    </View>
+                    <Text style={styles.todoMeta}>{done}/{total} tasks done</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
       </ScrollView>
     </View>
@@ -189,5 +247,50 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 10,
     fontFamily: 'times',
-  }
+  },
+  emptyText: {
+    color: '#9A9BA1',
+    fontFamily: 'times',
+  },
+  todoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#2A2B2E',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  todoTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+    fontFamily: 'times',
+  },
+  todoMeta: {
+    color: '#9A9BA1',
+    fontSize: 13,
+    fontFamily: 'times',
+    marginTop: 4,
+  },
+  progressBar: {
+    marginTop: 6,
+    height: 8,
+    backgroundColor: '#383a3e',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+  },
 });
