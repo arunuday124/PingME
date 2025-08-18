@@ -6,6 +6,7 @@ import Login from './src/components/Login';
 import SignUp from './src/components/SignUp';
 import Dashboard from './src/components/Dashboard';
 import { TodosProvider } from './src/context/TodosContext';
+import { actuatedNormalize } from './src/utils/responsive';
 
 const Stack = createStackNavigator();
 

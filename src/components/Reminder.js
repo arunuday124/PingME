@@ -12,14 +12,17 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import notifee, { TriggerType, AndroidImportance, AuthorizationStatus } from '@notifee/react-native';
 import { useEffect } from 'react';
 import { FlatList } from 'react-native';
+import { useTodos } from '../context/TodosContext';
+import moment from 'moment';
 
 const Reminder = () => {
+  const { reminders, addReminder, deleteReminder } = useTodos();
   const [reminderText, setReminderText] = useState('');
   const [scheduledAt, setScheduledAt] = useState(new Date(Date.now() + 5 * 60 * 1000));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [scheduledReminders, setScheduledReminders] = useState([]);
+  const [reminderDescription, setReminderDescription] = useState(''); // New state for description
 
   const formattedDate = useMemo(() => {
     const d = scheduledAt;
@@ -140,35 +143,24 @@ const Reminder = () => {
       Alert.alert('Scheduled', `Reminder set for ${formattedDate}.`);
       // Reset text but keep chosen time
       setReminderText('');
+      setReminderDescription(''); // Clear description on successful schedule
 
-      setScheduledReminders(prev =>
-        [...prev, { id: notificationId, text: reminderText.trim(), timestamp }]
-          .sort((a, b) => a.timestamp - b.timestamp)
+      // Save reminder to TodosContext
+      addReminder(
+        moment(scheduledAt), // date
+        reminderText.trim(), // title
+        reminderDescription.trim(), // description
+        false, // isAllDay (false for now, as time is picked)
+        moment(scheduledAt) // time
       );
+
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Failed to schedule the reminder.');
     } finally {
       setSubmitting(false);
     }
-  }, [ensurePermissionsAndChannel, formattedDate, reminderText, scheduledAt]);
-
-  const loadScheduledFromDevice = useCallback(async () => {
-    try {
-      const triggers = await notifee.getTriggerNotifications();
-      const mapped = triggers
-        .map(t => ({
-          id: t.notification.id,
-          text: t.notification.body || '',
-          timestamp: (t.trigger && t.trigger.timestamp) || 0,
-        }))
-        .filter(x => x.timestamp > Date.now());
-      mapped.sort((a, b) => a.timestamp - b.timestamp);
-      setScheduledReminders(mapped);
-    } catch (e) {
-      // ignore
-    }
-  }, []);
+  }, [ensurePermissionsAndChannel, formattedDate, reminderText, scheduledAt, addReminder, reminderDescription]);
 
   const cancelReminder = useCallback(async (id) => {
     try {
@@ -176,32 +168,26 @@ const Reminder = () => {
     } catch (e) {
       // ignore device state
     } finally {
-      setScheduledReminders(prev => prev.filter(r => r.id !== id));
+      deleteReminder(id);
     }
-  }, []);
-
-  useEffect(() => {
-    loadScheduledFromDevice();
-  }, [loadScheduledFromDevice]);
-
-  // Auto-prune expired reminders while app is open
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setScheduledReminders(prev => prev.filter(r => r.timestamp > Date.now()));
-    }, 30000); // every 30s
-    return () => clearInterval(interval);
-  }, []);
+  }, [deleteReminder]);
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={scheduledReminders}
-        keyExtractor={(item) => item.id}
+        data={reminders}
+        keyExtractor={(item) => String(item.id)}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={styles.reminderItem}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.reminderText}>{item.text}</Text>
-              <Text style={styles.reminderWhen}>{new Date(item.timestamp).toLocaleString()}</Text>
+              <Text style={styles.reminderText}>{item.title}</Text>
+              {item.description ? (
+                <Text style={styles.reminderDescription}>{item.description}</Text>
+              ) : null}
+              {!item.isAllDay && (
+                <Text style={styles.reminderWhen}>{moment(item.timestamp).format('YYYY-MM-DD HH:mm')}</Text>
+              )}
             </View>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => cancelReminder(item.id)}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -212,13 +198,23 @@ const Reminder = () => {
           <>
             <Text style={styles.title}>Set a Reminder</Text>
 
-            <Text style={styles.label}>What to remind</Text>
+            <Text style={styles.label}>Title</Text>
             <TextInput
               value={reminderText}
               onChangeText={setReminderText}
               placeholder="e.g., Call John about project"
               placeholderTextColor="#9A9BA1"
               style={styles.input}
+            />
+
+            <Text style={styles.label}>Description (Optional)</Text>
+            <TextInput
+              value={reminderDescription}
+              onChangeText={setReminderDescription}
+              placeholder="Add more details..."
+              placeholderTextColor="#9A9BA1"
+              style={[styles.input, styles.descriptionInput]}
+              multiline
             />
 
             <Text style={styles.label}>When to remind</Text>
@@ -276,6 +272,7 @@ export default Reminder;
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
+    paddingBottom: 75,
   },
   container: {
     flex: 1,
@@ -303,6 +300,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: '#FFFFFF',
     fontFamily: 'times',
+  },
+  descriptionInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   row: {
     flexDirection: 'row',
@@ -378,6 +379,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
     fontFamily: 'times',
+  },
+  reminderDescription: {
+    color: '#9A9BA1',
+    fontSize: 13,
+    fontFamily: 'times',
+    marginTop: 4,
+    marginBottom: 4,
   },
   reminderWhen: {
     color: '#9A9BA1',

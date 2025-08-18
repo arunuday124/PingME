@@ -1,10 +1,15 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity,Image } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import {
+  widthPercentageToDP as wp,
+  heightPercentageToDP as hp,
+} from 'react-native-responsive-screen';
 import Home from './Home';
 import List from './Todo';
 import Graph from './Reminder';
-import Account from './Account';
+
+// import Account from './Account';
 
 
 const Tab = createBottomTabNavigator();
@@ -21,10 +26,12 @@ function Dashboard() {
         right: 20,
         elevation: 0,
         backgroundColor: '#dbf0dd',
-        //borderRadius: 15,
+        borderRadius: 25,
         height: 72,
-        //marginLeft: 10,
-        //marginRight: 10,
+        marginLeft: wp('14%'),
+        marginRight: wp('14%'),
+        marginBottom: hp('2%'),
+        
         ...styles.shadow
       }
       }}
@@ -42,7 +49,7 @@ function Dashboard() {
                     width: 35,
                     height: 35,
                     tintColor: focused ? '#0a2d26' : '#59936dff',
-                    marginTop: 20,
+                    marginTop: 29,
                     
                   }}
                 />
@@ -64,10 +71,10 @@ function Dashboard() {
                         source={require('../../assets/images/list.png')}
                         resizeMode='contain'
                         style={{
-                          width: 35,
-                          height: 35,
+                          width: 40,
+                          height: 40,
                           tintColor: focused ? '#0a2d26' : '#59936dff',
-                          marginTop: 20
+                          marginTop: 29
                         }}
                       />
                     
@@ -112,10 +119,10 @@ function Dashboard() {
                 source={require('../../assets/images/reminder.png')}
                 resizeMode='contain'
                 style={{
-                  width: 35,
-                  height: 35,
+                  width: 40,
+                  height: 40,
                   tintColor: focused ? '#0a2d26' : '#59936dff',
-                  marginTop: 20
+                  marginTop: 29
                 }}
               />
             
@@ -128,7 +135,7 @@ function Dashboard() {
       />
 
       {/* Account page */}
-      <Tab.Screen name="Account" component={Account} 
+      {/* <Tab.Screen name="Account" component={Account} 
                 options={{
                   tabBarIcon: ({focused}) => (
                     <View style = {{ alignItems : 'center', justifyContent : 'center', }}>
@@ -149,7 +156,7 @@ function Dashboard() {
         
                 }}
       
-      />
+      /> */}
       
     </Tab.Navigator>
   )

@@ -4,8 +4,15 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  ScrollView
+  ScrollView,
+  Modal,
+  Pressable,
+  TextInput,
+  Switch,
+  Platform, // Import Platform
+  Animated, // Import Animated
 } from 'react-native';
+import DateTimePicker, { DateTimePickerAndroid, DateTimePickerIOS } from '@react-native-community/datetimepicker'; // Import DateTimePicker
 import React, { useState, useEffect, useRef } from 'react';
 import {
   widthPercentageToDP as wp,
@@ -18,7 +25,30 @@ const Home = () => {
   const [selectedDate, setSelectedDate] = useState(moment());
   const [dates, setDates] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(moment());
-  const { todos } = useTodos();
+  const { todos, reminders, addReminder } = useTodos();
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderDate, setReminderDate] = useState(moment());
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderDescription, setReminderDescription] = useState('');
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [reminderTime, setReminderTime] = useState(moment());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [activeTab, setActiveTab] = useState('todos');
+  const tabIndicatorAnim = useRef(new Animated.Value(0)).current; // For tab indicator animation
+
+  // Calculate the width of each tab based on the tabBar width (70% of screen width, divided by 2 tabs)
+  const tabWidth = wp('70%') / 2;
+
+  useEffect(() => {
+    Animated.timing(tabIndicatorAnim, {
+      toValue: activeTab === 'todos' ? 0 : 1,
+      duration: 300, // Animation duration
+      useNativeDriver: true, // Use native driver for performance
+    }).start();
+  }, [activeTab]); // Run animation when activeTab changes
+
+  console.log('Reminders in Home:', reminders); // Add this line
+  console.log('Selected date in Home:', selectedDate.format('YYYY-MM-DD')); // Add this line
 
   const flatListRef = useRef(null);
   const ITEM_WIDTH = 65 + 12; // dateItem width + marginRight
@@ -40,6 +70,10 @@ const Home = () => {
       }
     }
   }, [dates, currentMonth]);
+
+  const filteredReminders = reminders.filter(reminder =>
+    moment(reminder.date).isSame(selectedDate, 'day')
+  );
 
   const generateDates = month => {
     const firstDay = moment(month).startOf('month');
@@ -63,6 +97,58 @@ const Home = () => {
   const initialScrollIndex = moment().isSame(currentMonth, 'month')
     ? moment().date() - 1
     : 0;
+
+  const showTimepicker = () => {
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: reminderTime.toDate(),
+        onChange: onTimeSelected,
+        mode: 'time',
+        is24Hour: true,
+      });
+    } else {
+      setShowTimePicker(true);
+    }
+  };
+
+  const onTimeSelected = (event, selectedDate) => {
+    if (Platform.OS === 'ios') {
+      setShowTimePicker(false);
+    }
+    if (selectedDate) {
+      setReminderTime(moment(selectedDate));
+    }
+  };
+
+  const handleSaveReminder = () => {
+    // Logic to save reminder
+    console.log('Saving reminder:', {
+      date: reminderDate.format('YYYY-MM-DD'),
+      title: reminderTitle,
+      description: reminderDescription,
+      isAllDay: isAllDay,
+      time: isAllDay ? null : reminderTime.format('HH:mm'),
+    });
+    addReminder(
+      reminderDate,
+      reminderTitle,
+      reminderDescription,
+      isAllDay,
+      reminderTime
+    );
+    setShowReminderModal(false);
+    setReminderTitle('');
+    setReminderDescription('');
+    setIsAllDay(false);
+    setReminderTime(moment());
+  };
+
+  const toggleAllDaySwitch = () => {
+    setIsAllDay(!isAllDay);
+    if (!isAllDay) {
+      setReminderTime(moment());
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -109,6 +195,10 @@ const Home = () => {
           renderItem={({ item }) => (
             <TouchableOpacity
               onPress={() => setSelectedDate(item)}
+              onLongPress={() => {
+                setReminderDate(item);
+                setShowReminderModal(true);
+              }}
               style={[
                 styles.dateItem,
                 selectedDate.format('DD') === item.format('DD') &&
@@ -140,34 +230,170 @@ const Home = () => {
           )}
         />
       </View>
-      {/* Placeholder for on going task and reminder */}
-      <ScrollView>
-        <View>
-          <Text style={styles.header_task}>
-            Pending Tasks . . .
+
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        <Animated.View
+          style={[
+            styles.tabIndicator,
+            {
+              width: tabWidth,
+              transform: [
+                {
+                  translateX: tabIndicatorAnim.interpolate({
+                    inputRange: [0.1, 1.16],
+                    outputRange: [0, tabWidth], // Move from left (0) to right (tabWidth)
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('todos')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'todos' && styles.activeTabText,
+            ]}
+          >
+            Todos
           </Text>
-          {todos.length === 0 ? (
-            <Text style={styles.emptyText}>No Task Yet</Text>
-          ) : (
-            todos.map(todo => {
-              const total = todo.tasks.length;
-              const done = todo.tasks.filter(t => t.completed).length;
-              return (
-                <View key={todo.id} style={styles.todoItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.todoTitle}>{todo.title}</Text>
-                    <Text style={styles.todoMeta}>Created on: {todo.date}</Text>
-                    <View style={styles.progressBar}>
-                      <View style={[styles.progressFill, { width: `${total === 0 ? 0 : Math.round((done/total)*100)}%` }]} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('reminders')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'reminders' && styles.activeTabText,
+            ]}
+          >
+            Reminders
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Placeholder for on going task and reminder */}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {activeTab === 'todos' && (
+          <View style={{paddingBottom: 65}}>
+            {todos.length === 0 ? (
+              <Text style={styles.emptyText}>No Task Yet</Text>
+            ) : (
+              todos.map(todo => {
+                const total = todo.tasks.length;
+                const done = todo.tasks.filter(t => t.completed).length;
+                return (
+                  <View key={todo.id} style={styles.todoItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.todoTitle}>{todo.title}</Text>
+                      <Text style={styles.todoMeta}>Created on: {todo.date}</Text>
+                      <View style={styles.progressBar}>
+                        <View style={[styles.progressFill, { width: `${total === 0 ? 0 : Math.round((done/total)*100)}%` }]} />
+                      </View>
+                      <Text style={styles.todoMeta}>{done}/{total} tasks done</Text>
                     </View>
-                    <Text style={styles.todoMeta}>{done}/{total} tasks done</Text>
                   </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {activeTab === 'reminders' && (
+          <View style={{paddingBottom: 65}}>
+            {filteredReminders.length === 0 ? (
+              <Text style={styles.emptyText}>No Reminders for this Date</Text>
+            ) : (
+              filteredReminders.map(reminder => (
+                <View key={reminder.id} style={styles.reminderItem}>
+                  <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                  {reminder.description ? (
+                    <Text style={styles.reminderDescription}>{reminder.description}</Text>
+                  ) : null}
+                  {!reminder.isAllDay && (
+                    <Text style={styles.reminderTime}>{reminder.time}</Text>
+                  )}
                 </View>
-              );
-            })
-          )}
-        </View>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showReminderModal}
+        onRequestClose={() => {
+          setShowReminderModal(!showReminderModal);
+        }}>
+        <Pressable
+          style={styles.centeredView}
+          onPress={() => setShowReminderModal(false)}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>Set Reminder for {reminderDate.format('DD MMMM YYYY')}</Text>
+            {/* Reminder content will go here */}
+            <TextInput
+              style={styles.input}
+              placeholder="Title"
+              placeholderTextColor="#9A9BA1"
+              value={reminderTitle}
+              onChangeText={setReminderTitle}
+            />
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              placeholder="Description (Optional)"
+              placeholderTextColor="#9A9BA1"
+              multiline
+              value={reminderDescription}
+              onChangeText={setReminderDescription}
+            />
+            <View style={styles.rowContainer}>
+              <Text style={styles.label}>All Day:</Text>
+              <Switch
+                trackColor={{ false: "#767577", true: "#81b0ff" }}
+                thumbColor={Platform.OS === 'ios' ? "#f5dd4b" : "#f4f3f4"}
+                ios_backgroundColor="#3e3e3e"
+                onValueChange={toggleAllDaySwitch}
+                value={isAllDay}
+              />
+            </View>
+            {!isAllDay && (
+              <View style={styles.rowContainer}>
+                <Text style={styles.label}>Time:</Text>
+                <TouchableOpacity onPress={showTimepicker}>
+                  <Text style={styles.timeText}>{reminderTime.format('HH:mm')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {showTimePicker && (
+              <DateTimePicker
+                value={reminderTime.toDate()}
+                mode="time"
+                is24Hour={true}
+                display="default"
+                onChange={onTimeSelected}
+              />
+            )}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonSave]}
+                onPress={handleSaveReminder}>
+                <Text style={styles.textStyle}>Save Reminder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonClose]}
+                onPress={() => setShowReminderModal(false)}>
+                <Text style={styles.textStyle}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -212,6 +438,7 @@ const styles = StyleSheet.create({
   calendarContainer: {
     marginTop: 20,
     margin: -10,
+    paddingBottom: 10,
   },
   dateItem: {
     width: 65,
@@ -251,6 +478,10 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#9A9BA1',
     fontFamily: 'times',
+    fontSize: 38,
+    alignSelf: 'center',
+    marginTop: 80,
+    opacity: 0.3,
   },
   todoItem: {
     flexDirection: 'row',
@@ -261,6 +492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     marginTop: 10,
+    marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: '#4CAF50',
     shadowColor: '#000',
@@ -292,5 +524,185 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     backgroundColor: '#4CAF50',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalView: {
+    backgroundColor: '#373739ff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    width: '100%',
+    minHeight: hp('40%'), // Adjust height as needed
+  },
+  button: {
+    borderRadius: 20,
+    padding: 10,
+    elevation: 2,
+  },
+  buttonClose: {
+    backgroundColor: '#fc3f5bff',
+    marginTop: 10,
+  },
+  buttonSave: {
+    backgroundColor: '#4CAF50',
+    marginTop: 10,
+  },
+  textStyle: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalTitle: {
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  input: {
+    width: '100%',
+    backgroundColor: '#2A2B2E',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  descriptionInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 10,
+  },
+  label: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  timeText: {
+    color: '#81b0ff',
+    fontSize: 16,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginTop: 20,
+  },
+  button: {
+    borderRadius: 20,
+    padding: 10,
+    elevation: 2,
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  buttonClose: {
+    backgroundColor: '#fc3f5bff',
+  },
+  buttonSave: {
+    backgroundColor: '#4CAF50',
+  },
+  textStyle: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  modalTitle: {
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  reminderItem: {
+    backgroundColor: '#2A2B2E',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#81b0ff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  reminderTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+    fontFamily: 'times',
+  },
+  reminderDescription: {
+    color: '#9A9BA1',
+    fontSize: 13,
+    fontFamily: 'times',
+    marginTop: 4,
+  },
+  reminderTime: {
+    color: '#9A9BA1',
+    fontSize: 13,
+    fontFamily: 'times',
+    marginTop: 4,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#2A2B2E',
+    borderRadius: 25,
+    marginTop: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#383a3e',
+    width: '70%',
+    alignSelf: 'center',
+    overflow: 'hidden',
+    height: 50, // Explicit height to contain indicator
+  },
+  tabItem: {
+    flex: 1, // Distribute space equally
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10, // Maintain vertical padding for touchable area
+  },
+  activeTab: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 25,
+  },
+  tabText: {
+    color: '#9A9BA1',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'times',
+  },
+  activeTabText: {
+    color: '#FFFFFF',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 25,
   },
 });
