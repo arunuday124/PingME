@@ -6,8 +6,9 @@ import {
   TextInput,
   Modal,
   FlatList,
+  Animated,
 } from 'react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Swipeable } from 'react-native-gesture-handler';
 import {
   widthPercentageToDP as wp,
@@ -25,7 +26,36 @@ const Todo = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all | active | done
   const [expandedIds, setExpandedIds] = useState([]); // array of todo ids
-  const { todos, addTodo: addTodoCtx, deleteTodo: deleteTodoCtx, addTask: addTaskCtx, toggleTask: toggleTaskCtx } = useTodos();
+  const {
+    todos,
+    addTodo: addTodoCtx,
+    deleteTodo: deleteTodoCtx,
+    addTask: addTaskCtx,
+    toggleTask: toggleTaskCtx,
+  } = useTodos();
+
+  // Animated values for each todo's progress (percent 0-100)
+  const progressAnims = useRef({});
+
+  // Animate progress values whenever todos change
+  useEffect(() => {
+    todos.forEach(t => {
+      const total = t.tasks.length;
+      const completed = t.tasks.filter(x => x.completed).length;
+      const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+      if (!progressAnims.current[t.id]) {
+        // initialize to current percent to avoid jump
+        progressAnims.current[t.id] = new Animated.Value(percent);
+      } else {
+        Animated.timing(progressAnims.current[t.id], {
+          toValue: percent,
+          duration: 420,
+          useNativeDriver: false, // width animation can't use native driver
+        }).start();
+      }
+    });
+  }, [todos]);
 
   const addTodo = () => {
     if (!todoTitle.trim()) return;
@@ -94,7 +124,9 @@ const Todo = () => {
 
   const toggleExpand = todoId => {
     setExpandedIds(prev =>
-      prev.includes(todoId) ? prev.filter(id => id !== todoId) : [...prev, todoId],
+      prev.includes(todoId)
+        ? prev.filter(id => id !== todoId)
+        : [...prev, todoId],
     );
   };
 
@@ -113,7 +145,8 @@ const Todo = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Todo Lists</Text>
         <Text style={styles.headerSubtitle}>
-          {summary.totalLists} lists · {summary.completedTasks}/{summary.totalTasks} tasks done
+          {summary.totalLists} lists · {summary.completedTasks}/
+          {summary.totalTasks} tasks done
         </Text>
       </View>
 
@@ -135,7 +168,10 @@ const Todo = () => {
         ].map(f => (
           <TouchableOpacity
             key={f.key}
-            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+            style={[
+              styles.filterChip,
+              filter === f.key && styles.filterChipActive,
+            ]}
             onPress={() => setFilter(f.key)}
           >
             <Text
@@ -159,7 +195,9 @@ const Todo = () => {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No Task Yet</Text>
-            <Text style={styles.emptySubtitle}>Tap + to create your first Todo</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap + to create your first Todo
+            </Text>
           </View>
         }
         renderItem={({ item: todoItem }) => {
@@ -182,17 +220,43 @@ const Todo = () => {
                       <Text style={styles.todoTitle} numberOfLines={1}>
                         {todoItem.title}
                       </Text>
-                      <Text style={styles.todoDate}>Created on: {todoItem.date}</Text>
+                      <Text style={styles.todoDate}>
+                        Created on: {todoItem.date}
+                      </Text>
                     </View>
                     <View
-                      style={[styles.statusPill, isDone ? styles.statusDone : styles.statusActive]}
+                      style={[
+                        styles.statusPill,
+                        isDone ? styles.statusDone : styles.statusActive,
+                      ]}
                     >
-                      <Text style={styles.statusPillText}>{isDone ? 'Done' : 'Active'}</Text>
+                      <Text style={styles.statusPillText}>
+                        {isDone ? 'Done' : 'Active'}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.progressContainer}>
                     <View style={styles.progressBar}>
-                      <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
+                      {(() => {
+                        // ensure animated value exists for this todo
+                        if (!progressAnims.current[todoItem.id]) {
+                          progressAnims.current[todoItem.id] =
+                            new Animated.Value(Math.round(ratio * 100));
+                        }
+                        const anim = progressAnims.current[todoItem.id];
+                        const widthInterpolate = anim.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ['0%', '100%'],
+                        });
+                        return (
+                          <Animated.View
+                            style={[
+                              styles.progressFill,
+                              { width: widthInterpolate },
+                            ]}
+                          />
+                        );
+                      })()}
                     </View>
                     <Text style={styles.progressText}>
                       {completedTasks}/{totalTasks} tasks

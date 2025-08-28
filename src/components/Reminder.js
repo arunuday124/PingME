@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Platform,
@@ -171,6 +171,42 @@ const Reminder = () => {
       deleteReminder(id);
     }
   }, [deleteReminder]);
+
+  const intervalRef = useRef();
+  const [localReminders, setLocalReminders] = useState([]);
+
+  useEffect(() => {
+    // Sync local reminders with context reminders
+    setLocalReminders(reminders.map(r => ({ ...r, notified: r.notified || false })));
+  }, [reminders]);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(async () => {
+      const now = Date.now();
+      let updatedReminders = [...localReminders];
+      let changed = false;
+      for (let i = 0; i < updatedReminders.length; i++) {
+        const reminder = updatedReminders[i];
+        if (!reminder.notified && reminder.timestamp <= now) {
+          const channelId = await ensurePermissionsAndChannel();
+          await notifee.displayNotification({
+            title: 'Reminder',
+            body: reminder.title,
+            android: {
+              channelId,
+              smallIcon: 'ic_stat_notification',
+            },
+          });
+          updatedReminders[i] = { ...reminder, notified: true };
+          changed = true;
+        }
+      }
+      if (changed) {
+        setLocalReminders(updatedReminders);
+      }
+    }, 10000);
+    return () => clearInterval(intervalRef.current);
+  }, [localReminders, ensurePermissionsAndChannel]);
 
   return (
     <View style={styles.container}>

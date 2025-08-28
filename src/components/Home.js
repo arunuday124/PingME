@@ -12,7 +12,10 @@ import {
   Platform, // Import Platform
   Animated, // Import Animated
 } from 'react-native';
-import DateTimePicker, { DateTimePickerAndroid, DateTimePickerIOS } from '@react-native-community/datetimepicker'; // Import DateTimePicker
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  DateTimePickerIOS,
+} from '@react-native-community/datetimepicker'; // Import DateTimePicker
 import React, { useState, useEffect, useRef } from 'react';
 import {
   widthPercentageToDP as wp,
@@ -25,7 +28,8 @@ const Home = () => {
   const [selectedDate, setSelectedDate] = useState(moment());
   const [dates, setDates] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(moment());
-  const { todos, reminders, addReminder } = useTodos();
+  const { todos, reminders, addReminder, toggleTask } = useTodos();
+  const [expandedIds, setExpandedIds] = useState([]);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [reminderDate, setReminderDate] = useState(moment());
   const [reminderTitle, setReminderTitle] = useState('');
@@ -46,6 +50,29 @@ const Home = () => {
       useNativeDriver: true, // Use native driver for performance
     }).start();
   }, [activeTab]); // Run animation when activeTab changes
+
+  // Animated values for each todo's progress (percent 0-100)
+  const progressAnimsRef = useRef({});
+
+  // Animate progress values whenever todos change
+  useEffect(() => {
+    todos.forEach(t => {
+      const total = t.tasks.length;
+      const completed = t.tasks.filter(x => x.completed).length;
+      const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+      if (!progressAnimsRef.current[t.id]) {
+        // initialize to current percent to avoid jump
+        progressAnimsRef.current[t.id] = new Animated.Value(percent);
+      } else {
+        Animated.timing(progressAnimsRef.current[t.id], {
+          toValue: percent,
+          duration: 420,
+          useNativeDriver: false, // width animation can't use native driver
+        }).start();
+      }
+    });
+  }, [todos]);
 
   console.log('Reminders in Home:', reminders); // Add this line
   console.log('Selected date in Home:', selectedDate.format('YYYY-MM-DD')); // Add this line
@@ -72,7 +99,7 @@ const Home = () => {
   }, [dates, currentMonth]);
 
   const filteredReminders = reminders.filter(reminder =>
-    moment(reminder.date).isSame(selectedDate, 'day')
+    moment(reminder.date).isSame(selectedDate, 'day'),
   );
 
   const generateDates = month => {
@@ -134,7 +161,7 @@ const Home = () => {
       reminderTitle,
       reminderDescription,
       isAllDay,
-      reminderTime
+      reminderTime,
     );
     setShowReminderModal(false);
     setReminderTitle('');
@@ -184,12 +211,18 @@ const Home = () => {
             index,
           })}
           initialScrollIndex={initialScrollIndex}
-          onScrollToIndexFailed={(info) => {
+          onScrollToIndexFailed={info => {
             // safe fallback
-            const offset = Math.min(info.averageItemLength * info.index, info.averageItemLength * (dates.length - 1));
+            const offset = Math.min(
+              info.averageItemLength * info.index,
+              info.averageItemLength * (dates.length - 1),
+            );
             flatListRef.current?.scrollToOffset({ offset, animated: true });
             setTimeout(() => {
-              flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+              });
             }, 50);
           }}
           renderItem={({ item }) => (
@@ -280,23 +313,151 @@ const Home = () => {
       {/* Placeholder for on going task and reminder */}
       <ScrollView showsVerticalScrollIndicator={false}>
         {activeTab === 'todos' && (
-          <View style={{paddingBottom: 65}}>
+          <View style={{ paddingBottom: 65 }}>
             {todos.length === 0 ? (
               <Text style={styles.emptyText}>No Task Yet</Text>
             ) : (
               todos.map(todo => {
                 const total = todo.tasks.length;
                 const done = todo.tasks.filter(t => t.completed).length;
+                const expanded = expandedIds.includes(todo.id);
+                const toggleExpand = id => {
+                  setExpandedIds(prev =>
+                    prev.includes(id)
+                      ? prev.filter(x => x !== id)
+                      : [...prev, id],
+                  );
+                };
                 return (
                   <View key={todo.id} style={styles.todoItem}>
-                    <View style={{ flex: 1 }}>
+                    <TouchableOpacity
+                      onPress={() => toggleExpand(todo.id)}
+                      activeOpacity={0.9}
+                      style={{ flex: 1 }}
+                    >
                       <Text style={styles.todoTitle}>{todo.title}</Text>
-                      <Text style={styles.todoMeta}>Created on: {todo.date}</Text>
+                      <Text style={styles.todoMeta}>
+                        Created on: {todo.date}
+                      </Text>
                       <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${total === 0 ? 0 : Math.round((done/total)*100)}%` }]} />
+                        {(() => {
+                          if (!progressAnimsRef.current[todo.id]) {
+                            progressAnimsRef.current[todo.id] =
+                              new Animated.Value(
+                                Math.round(
+                                  (done / (total === 0 ? 1 : total)) * 100,
+                                ),
+                              );
+                          }
+                          const anim = progressAnimsRef.current[todo.id];
+                          const widthInterpolate = anim.interpolate({
+                            inputRange: [0, 100],
+                            outputRange: ['0%', '100%'],
+                          });
+                          return (
+                            <Animated.View
+                              style={[
+                                styles.progressFill,
+                                { width: widthInterpolate },
+                              ]}
+                            />
+                          );
+                        })()}
                       </View>
-                      <Text style={styles.todoMeta}>{done}/{total} tasks done</Text>
-                    </View>
+                      <Text style={styles.todoMeta}>
+                        {done}/{total} tasks done
+                      </Text>
+
+                      {expanded && (
+                        <View style={styles.tasksContainer}>
+                          {todo.tasks.length === 0 ? (
+                            <Text style={styles.no_Tasks_Text}>
+                              No tasks yet
+                            </Text>
+                          ) : (
+                            (() => {
+                              const activeTasks = todo.tasks.filter(
+                                t => !t.completed,
+                              );
+                              const doneTasks = todo.tasks.filter(
+                                t => t.completed,
+                              );
+                              return (
+                                <>
+                                  {activeTasks.map(task => (
+                                    <TouchableOpacity
+                                      key={task.id}
+                                      style={styles.taskItem}
+                                      onPress={() =>
+                                        toggleTask(todo.id, task.id)
+                                      }
+                                      activeOpacity={0.8}
+                                    >
+                                      <View style={styles.checkboxContainer}>
+                                        <View
+                                          style={[
+                                            styles.checkbox,
+                                            task.completed && styles.checkedBox,
+                                          ]}
+                                        />
+                                        <Text
+                                          style={[
+                                            styles.taskText,
+                                            task.completed &&
+                                              styles.completedTask,
+                                          ]}
+                                        >
+                                          {task.text}
+                                        </Text>
+                                      </View>
+                                    </TouchableOpacity>
+                                  ))}
+
+                                  {doneTasks.length > 0 && (
+                                    <View style={styles.doneSection}>
+                                      <Text style={styles.sectionHeader}>
+                                        Done
+                                      </Text>
+                                      {doneTasks.map(task => (
+                                        <TouchableOpacity
+                                          key={task.id}
+                                          style={styles.taskItem}
+                                          onPress={() =>
+                                            toggleTask(todo.id, task.id)
+                                          }
+                                          activeOpacity={0.8}
+                                        >
+                                          <View
+                                            style={styles.checkboxContainer}
+                                          >
+                                            <View
+                                              style={[
+                                                styles.checkbox,
+                                                task.completed &&
+                                                  styles.checkedBox,
+                                              ]}
+                                            />
+                                            <Text
+                                              style={[
+                                                styles.taskText,
+                                                task.completed &&
+                                                  styles.completedTask,
+                                              ]}
+                                            >
+                                              {task.text}
+                                            </Text>
+                                          </View>
+                                        </TouchableOpacity>
+                                      ))}
+                                    </View>
+                                  )}
+                                </>
+                              );
+                            })()
+                          )}
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 );
               })
@@ -305,15 +466,17 @@ const Home = () => {
         )}
 
         {activeTab === 'reminders' && (
-          <View style={{paddingBottom: 65}}>
+          <View style={{ paddingBottom: 65 }}>
             {filteredReminders.length === 0 ? (
-              <Text style={styles.emptyText}>No Reminders for this Date</Text>
+              <Text style={styles.emptyText}>No Reminders </Text>
             ) : (
               filteredReminders.map(reminder => (
                 <View key={reminder.id} style={styles.reminderItem}>
                   <Text style={styles.reminderTitle}>{reminder.title}</Text>
                   {reminder.description ? (
-                    <Text style={styles.reminderDescription}>{reminder.description}</Text>
+                    <Text style={styles.reminderDescription}>
+                      {reminder.description}
+                    </Text>
                   ) : null}
                   {!reminder.isAllDay && (
                     <Text style={styles.reminderTime}>{reminder.time}</Text>
@@ -326,16 +489,21 @@ const Home = () => {
       </ScrollView>
       <Modal
         animationType="slide"
+        statusBarTranslucent={true}
         transparent={true}
         visible={showReminderModal}
         onRequestClose={() => {
           setShowReminderModal(!showReminderModal);
-        }}>
+        }}
+      >
         <Pressable
           style={styles.centeredView}
-          onPress={() => setShowReminderModal(false)}>
+          onPress={() => setShowReminderModal(false)}
+        >
           <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>Set Reminder for {reminderDate.format('DD MMMM YYYY')}</Text>
+            <Text style={styles.modalTitle}>
+              Set Reminder for {reminderDate.format('DD MMMM YYYY')}
+            </Text>
             {/* Reminder content will go here */}
             <TextInput
               style={styles.input}
@@ -355,8 +523,8 @@ const Home = () => {
             <View style={styles.rowContainer}>
               <Text style={styles.label}>All Day:</Text>
               <Switch
-                trackColor={{ false: "#767577", true: "#81b0ff" }}
-                thumbColor={Platform.OS === 'ios' ? "#f5dd4b" : "#f4f3f4"}
+                trackColor={{ false: '#767577', true: '#81b0ff' }}
+                thumbColor={Platform.OS === 'ios' ? '#f5dd4b' : '#f4f3f4'}
                 ios_backgroundColor="#3e3e3e"
                 onValueChange={toggleAllDaySwitch}
                 value={isAllDay}
@@ -366,7 +534,9 @@ const Home = () => {
               <View style={styles.rowContainer}>
                 <Text style={styles.label}>Time:</Text>
                 <TouchableOpacity onPress={showTimepicker}>
-                  <Text style={styles.timeText}>{reminderTime.format('HH:mm')}</Text>
+                  <Text style={styles.timeText}>
+                    {reminderTime.format('HH:mm ')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -382,12 +552,14 @@ const Home = () => {
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={[styles.button, styles.buttonSave]}
-                onPress={handleSaveReminder}>
+                onPress={handleSaveReminder}
+              >
                 <Text style={styles.textStyle}>Save Reminder</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.buttonClose]}
-                onPress={() => setShowReminderModal(false)}>
+                onPress={() => setShowReminderModal(false)}
+              >
                 <Text style={styles.textStyle}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -467,7 +639,7 @@ const styles = StyleSheet.create({
   selectedText: {
     color: '#FFFFFF',
   },
-  header_task:{
+  header_task: {
     fontSize: 25,
     fontWeight: 'bold',
     color: '#FFFFFF',
@@ -594,12 +766,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   label: {
-    color: '#FFFFFF',
+    color: '#ffffffff',
     fontSize: 16,
+    fontFamily: 'times',
   },
   timeText: {
     color: '#81b0ff',
     fontSize: 16,
+    // marginRight: 20
+    fontFamily: 'times',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -609,7 +784,7 @@ const styles = StyleSheet.create({
   },
   button: {
     borderRadius: 20,
-    padding: 10,
+    padding: 20,
     elevation: 2,
     flex: 1,
     marginHorizontal: 5,
@@ -624,6 +799,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     textAlign: 'center',
+    fontFamily: 'times',
   },
   modalTitle: {
     marginBottom: 15,
@@ -631,6 +807,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'times',
   },
   reminderItem: {
     backgroundColor: '#2A2B2E',
@@ -665,6 +842,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'times',
     marginTop: 4,
+  },
+  tasksContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#383a3e',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  checkedBox: {
+    backgroundColor: '#4CAF50',
+  },
+  taskItem: {
+    paddingVertical: 6,
+  },
+  taskText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  completedTask: {
+    textDecorationLine: 'line-through',
+    color: '#666',
+  },
+  doneSection: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#2f3336',
+    paddingTop: 8,
+  },
+  sectionHeader: {
+    color: '#9A9BA1',
+    fontSize: 13,
+    marginBottom: 6,
+    fontFamily: 'times',
   },
   tabBar: {
     flexDirection: 'row',
@@ -702,7 +924,14 @@ const styles = StyleSheet.create({
   tabIndicator: {
     position: 'absolute',
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#53ba4eff',
     borderRadius: 25,
+  },
+  no_Tasks_Text: {
+    color: '#e0e2edff',
+    fontFamily: 'times',
+    fontSize: 16,
+    alignSelf: 'center',
+    opacity: 0.3,
   },
 });
